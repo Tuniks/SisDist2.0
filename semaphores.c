@@ -4,10 +4,10 @@
 #include <semaphore.h>
 #include <time.h>
 
-#define N_PRODUCERS 2
-#define N_CONSUMERS 2
-#define QUANTITY 10
-#define BUFFER_SIZE 5
+#define QUANTITY 100000
+#define BUFFER_SIZE 1
+#define RANDOM_LIMIT 10000000
+
 
 typedef enum { false, true } bool;
 
@@ -54,11 +54,10 @@ void *producerThread(void *arg){
 		if(produced > 0){
 			position = getEmptyPosition(shared_memory);
 			if(position >= 0){
-				number = rand() % 501;
+				number = rand() % RANDOM_LIMIT;
 				shared_memory[position] = number;
 			}
-
-			printf("produzido - %i\n", number);
+			//printf("produzido - %i\n", number);
 			--produced;
 		} else {
 			active = false;
@@ -67,13 +66,14 @@ void *producerThread(void *arg){
 		sem_post(&mutex);
 		sem_post(&full);
 
-		//printf("produzido - %i\n", number);
+
 	}
 }
 
 void *consumerThread(void *arg){
 	static int consumed = QUANTITY;
-	int number, position = 0;
+	int number = -1;
+	int position = 0;
 	bool active = true;
 
 	while(active){
@@ -86,8 +86,8 @@ void *consumerThread(void *arg){
 				number = shared_memory[position];
 				shared_memory[position] = 0;
 			}
-			bool prime = isPrime(number); 
-			printf("%i %sé primo\n", number, prime?"":"não ");
+			//bool prime = isPrime(number); 
+			//printf("%i %sé primo\n", number, prime?"":"não ");
 			--consumed;
 		} else {
 
@@ -97,8 +97,48 @@ void *consumerThread(void *arg){
 		sem_post(&mutex);
 		sem_post(&empty);	
 
-		//printf("consumido - %i\n", number);
+		if(number >= 0){
+			bool prime = isPrime(number); 
+			//printf("%i %sé primo\n", number, prime?"":"não ");
+			number = -1;
+		}
 	}
+}
+
+int createProducerConsumerThreads(int nProd, int nCom){
+	pthread_t *thread_c_id = malloc(sizeof(pthread_t) * nCom);
+	pthread_t *thread_p_id = malloc(sizeof(pthread_t) * nProd);
+
+	for(int i = 0; i < nProd; i++){
+		int *arg = malloc(sizeof(*arg));
+		*arg = i;
+
+		if(pthread_create(&thread_p_id[i], NULL, producerThread, arg)){
+			fprintf(stderr, "error creating thread\n");
+			free(thread_c_id);
+			free(thread_p_id);
+			return 1;
+		}
+	}
+	for(int i = 0; i < nCom; i++){
+		if(pthread_create(&thread_c_id[i], NULL, consumerThread, NULL)){
+			fprintf(stderr, "error creating thread\n");
+			free(thread_c_id);
+			free(thread_p_id);
+			return 1;
+		}
+	}
+
+	for(int i = 0; i < nProd; i++){
+		pthread_join(thread_p_id[i], NULL);
+	}
+	for(int i = 0; i < nCom; i++){
+		pthread_join(thread_c_id[i], NULL);
+	}
+
+	free(thread_c_id);
+	free(thread_p_id);
+	return 0;
 }
 
 int main(){
@@ -112,31 +152,23 @@ int main(){
 
 	srand(time(NULL));
 
-	pthread_t thread_c_id[N_CONSUMERS];
-	pthread_t thread_p_id[N_PRODUCERS];
+	time_t begin[9];
+	time_t end[9];
+	int nProd[9] = {1, 1, 1, 1, 1, 2, 4, 8, 16};
+	int nCom[9] = {1, 2, 4, 8, 16, 1, 1, 1, 1};
 
-	for(int i = 0; i < N_PRODUCERS; i++){
-		int *arg = malloc(sizeof(*arg));
-		*arg = i;
+	for(int i = 0; i < 9; i++){
+		begin[i] = 0;
+		end[i] = 0;
+	}
 
-		if(pthread_create(&thread_p_id[i], NULL, producerThread, arg)){
-			fprintf(stderr, "error creating thread\n");
-			return 1;
+	for(int j = 0; j < 10; j++){
+		for(int i = 0; i < 1; i++){
+			begin[i] += time(NULL);
+			createProducerConsumerThreads(nProd[i], nCom[i]);
+			end[i] += time(NULL);
 		}
-	}
-	for(int i = 0; i < N_CONSUMERS; i++){
-		if(pthread_create(&thread_c_id[i], NULL, consumerThread, NULL)){
-			fprintf(stderr, "error creating thread\n");
-			return 1;
-		}
-	}
-
-	for(int i = 0; i < N_PRODUCERS; i++){
-		pthread_join(thread_p_id[i], NULL);
-	}
-	for(int i = 0; i < N_CONSUMERS; i++){
-		pthread_join(thread_c_id[i], NULL);
-	}
+	}	
 
 	sem_destroy(&mutex);
 	sem_destroy(&full);
