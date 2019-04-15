@@ -5,14 +5,14 @@
 #include <time.h>
 
 #define QUANTITY 100000
-#define BUFFER_SIZE 1
+#define BUFFER_SIZE 16
 #define RANDOM_LIMIT 10000000
-#define AVERAGE_ROUNDS 1
+#define AVERAGE_ROUNDS 5
 
 
 typedef enum { false, true } bool;
 
-sem_t mutex, empty, full;
+sem_t mutex, empty, full, producing, consuming;
 int shared_memory[BUFFER_SIZE];
 int consumed = QUANTITY;
 int produced = QUANTITY;
@@ -46,68 +46,73 @@ bool isPrime(int num){
 
 void *producerThread(void *arg){
 	int id = *((int *)arg);
-	int number, position = 0;
+	int number = 0;
 	bool active = true;
-	//printf("%d\n", produced);
 
 	while(active){
-		sem_wait(&empty);
-		sem_wait(&mutex);
-
+		number = rand() % RANDOM_LIMIT;
+		sem_wait(&producing);
 		if(produced > 0){
-			position = getEmptyPosition(shared_memory);
+			sem_wait(&empty);
+			sem_wait(&mutex);
+
+			int position = getEmptyPosition(shared_memory);
 			if(position >= 0){
-				number = rand() % RANDOM_LIMIT;
 				shared_memory[position] = number;
 			}
-			//printf("produzido - %i\n", number);
 			--produced;
+
+			sem_post(&mutex);
+			sem_post(&full);
 		} else {
 			active = false;
 		}
 
-		sem_post(&mutex);
-		sem_post(&full);
+		sem_post(&producing);
 	}
-	printf("out\n");
 }
 
 void *consumerThread(void *arg){
 	int number = -1;
-	int position = 0;
 	bool active = true;
 
 	while(active){
-		sem_wait(&full);
-		sem_wait(&mutex);
+		sem_wait(&consuming);
 
 		if(consumed > 0){
-			position = getFullPosition(shared_memory);
+			sem_wait(&full);
+			sem_wait(&mutex);
+
+			int position = getFullPosition(shared_memory);
 			if(position >= 0){
 				number = shared_memory[position];
 				shared_memory[position] = 0;
 			}
-			//bool prime = isPrime(number); 
-			//printf("%i %sé primo\n", consumed, prime?"":"não ");
 			--consumed;
+			
+			sem_post(&mutex);
+			sem_post(&empty);
 		} else {
 
 			active = false;
 		}
 
-		sem_post(&mutex);
-		sem_post(&empty);	
-
+		sem_post(&consuming);	
 		if(number >= 0){
 			bool prime = isPrime(number); 
 			//printf("%i %sé primo\n", number, prime?"":"não ");
 			number = -1;
 		}
 	}
-	printf("fora\n");
 }
 
 int createProducerConsumerThreads(int nProd, int nCom){
+	sem_init(&mutex, 0, 1);
+	sem_init(&producing, 0, 1);
+	sem_init(&consuming, 0, 1);
+	sem_init(&empty, 0, BUFFER_SIZE);
+	sem_init(&full, 0, 0);
+
 	pthread_t *thread_c_id = malloc(sizeof(pthread_t) * nCom);
 	pthread_t *thread_p_id = malloc(sizeof(pthread_t) * nProd);
 
@@ -143,15 +148,16 @@ int createProducerConsumerThreads(int nProd, int nCom){
 
 	free(thread_c_id);
 	free(thread_p_id);
+
+	sem_destroy(&mutex);
+	sem_destroy(&producing);
+	sem_destroy(&consuming);
+	sem_destroy(&full);
+	sem_destroy(&empty);
 	return 0;
 }
 
 int main(){
-	sem_init(&mutex, 0, 1);
-	sem_init(&empty, 0, BUFFER_SIZE);
-	sem_init(&full, 0, 0);
-
-
 	for(int i=0; i < BUFFER_SIZE; i++){
 		shared_memory[i] = 0;
 	}
@@ -169,13 +175,12 @@ int main(){
 	}
 
 	for(int i = 0; i < 9; i++){
-		printf("a\n");
+		printf("%d\n", i);
 		for(int j = 0; j < AVERAGE_ROUNDS; j++){
 			begin[i] += clock();
-			createProducerConsumerThreads(2, 1);
+			createProducerConsumerThreads(nProd[i], nCom[i]);
 			end[i] += clock();
 		}
-		printf("%d\n", i);
 	}	
 
 	for(int i=0; i < 9; i++){
@@ -183,9 +188,5 @@ int main(){
 		printf("tempo combo %d: %f\n", i, avg_diff_t);
 	}
 
-
-	sem_destroy(&mutex);
-	sem_destroy(&full);
-	sem_destroy(&empty);
 	return 0;
 }
