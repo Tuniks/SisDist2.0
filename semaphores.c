@@ -7,12 +7,15 @@
 #define QUANTITY 100000
 #define BUFFER_SIZE 1
 #define RANDOM_LIMIT 10000000
+#define AVERAGE_ROUNDS 1
 
 
 typedef enum { false, true } bool;
 
 sem_t mutex, empty, full;
 int shared_memory[BUFFER_SIZE];
+int consumed = QUANTITY;
+int produced = QUANTITY;
 
 int getEmptyPosition(int array[]){
 	for(int i = 0; i < BUFFER_SIZE; i++){
@@ -42,10 +45,10 @@ bool isPrime(int num){
 
 
 void *producerThread(void *arg){
-	static int produced = QUANTITY;
 	int id = *((int *)arg);
 	int number, position = 0;
 	bool active = true;
+	//printf("%d\n", produced);
 
 	while(active){
 		sem_wait(&empty);
@@ -65,13 +68,11 @@ void *producerThread(void *arg){
 
 		sem_post(&mutex);
 		sem_post(&full);
-
-
 	}
+	printf("out\n");
 }
 
 void *consumerThread(void *arg){
-	static int consumed = QUANTITY;
 	int number = -1;
 	int position = 0;
 	bool active = true;
@@ -87,7 +88,7 @@ void *consumerThread(void *arg){
 				shared_memory[position] = 0;
 			}
 			//bool prime = isPrime(number); 
-			//printf("%i %sé primo\n", number, prime?"":"não ");
+			//printf("%i %sé primo\n", consumed, prime?"":"não ");
 			--consumed;
 		} else {
 
@@ -103,11 +104,15 @@ void *consumerThread(void *arg){
 			number = -1;
 		}
 	}
+	printf("fora\n");
 }
 
 int createProducerConsumerThreads(int nProd, int nCom){
 	pthread_t *thread_c_id = malloc(sizeof(pthread_t) * nCom);
 	pthread_t *thread_p_id = malloc(sizeof(pthread_t) * nProd);
+
+	produced = QUANTITY;
+	consumed = QUANTITY;
 
 	for(int i = 0; i < nProd; i++){
 		int *arg = malloc(sizeof(*arg));
@@ -146,14 +151,15 @@ int main(){
 	sem_init(&empty, 0, BUFFER_SIZE);
 	sem_init(&full, 0, 0);
 
+
 	for(int i=0; i < BUFFER_SIZE; i++){
 		shared_memory[i] = 0;
 	}
 
 	srand(time(NULL));
 
-	time_t begin[9];
-	time_t end[9];
+	clock_t begin[9];
+	clock_t end[9];
 	int nProd[9] = {1, 1, 1, 1, 1, 2, 4, 8, 16};
 	int nCom[9] = {1, 2, 4, 8, 16, 1, 1, 1, 1};
 
@@ -162,17 +168,24 @@ int main(){
 		end[i] = 0;
 	}
 
-	for(int j = 0; j < 10; j++){
-		for(int i = 0; i < 1; i++){
-			begin[i] += time(NULL);
-			createProducerConsumerThreads(nProd[i], nCom[i]);
-			end[i] += time(NULL);
+	for(int i = 0; i < 9; i++){
+		printf("a\n");
+		for(int j = 0; j < AVERAGE_ROUNDS; j++){
+			begin[i] += clock();
+			createProducerConsumerThreads(2, 1);
+			end[i] += clock();
 		}
+		printf("%d\n", i);
 	}	
+
+	for(int i=0; i < 9; i++){
+		double avg_diff_t = ((double)(end[i] - begin[i]))/(CLOCKS_PER_SEC * AVERAGE_ROUNDS);
+		printf("tempo combo %d: %f\n", i, avg_diff_t);
+	}
+
 
 	sem_destroy(&mutex);
 	sem_destroy(&full);
 	sem_destroy(&empty);
-
 	return 0;
 }
