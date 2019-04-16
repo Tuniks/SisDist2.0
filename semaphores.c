@@ -3,11 +3,12 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <time.h>
+#include <math.h>
 
 #define QUANTITY 100000
-#define BUFFER_SIZE 16
+#define BUFFER_SIZE 1
 #define RANDOM_LIMIT 10000000
-#define AVERAGE_ROUNDS 5
+#define AVERAGE_ROUNDS 10
 
 
 typedef enum { false, true } bool;
@@ -36,7 +37,7 @@ int getFullPosition(int array[]){
 bool isPrime(int num){
     if (num <= 1) return false;
     if (num % 2 == 0 && num > 2) return false;
-    for(int i = 3; i < num / 2; i+= 2){
+    for(int i = 3; i < sqrt(num); i+= 2){
         if (num % i == 0)
             return false;
     }
