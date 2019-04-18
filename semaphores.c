@@ -8,7 +8,7 @@
 #define QUANTITY 100000
 #define BUFFER_SIZE 1
 #define RANDOM_LIMIT 10000000
-#define AVERAGE_ROUNDS 10
+#define AVERAGE_ROUNDS 1
 
 
 typedef enum { false, true } bool;
@@ -37,7 +37,11 @@ int getFullPosition(int array[]){
 bool isPrime(int num){
     if (num <= 1) return false;
     if (num % 2 == 0 && num > 2) return false;
-    for(int i = 3; i < sqrt(num); i+= 2){
+    
+    // Loop otimizado
+    for(int i = 3; i < sqrt(num); i+= 2){			
+    // Loop ineficiente
+    //for(int i = 3; i < num/2; i+= 2){
         if (num % i == 0)
             return false;
     }
@@ -165,27 +169,27 @@ int main(){
 
 	srand(time(NULL));
 
-	clock_t begin[9];
-	clock_t end[9];
+	struct timespec begin[9];
+	struct timespec end[9];
 	int nProd[9] = {1, 1, 1, 1, 1, 2, 4, 8, 16};
 	int nCom[9] = {1, 2, 4, 8, 16, 1, 1, 1, 1};
 
-	for(int i = 0; i < 9; i++){
-		begin[i] = 0;
-		end[i] = 0;
-	}
+	// for(int i = 0; i < 9; i++){
+	// 	begin[i] = 0;
+	// 	end[i] = 0;
+	// }
 
 	for(int i = 0; i < 9; i++){
 		printf("%d\n", i);
 		for(int j = 0; j < AVERAGE_ROUNDS; j++){
-			begin[i] += clock();
+			clock_gettime(CLOCK_MONOTONIC, &begin[i]);
 			createProducerConsumerThreads(nProd[i], nCom[i]);
-			end[i] += clock();
+			clock_gettime(CLOCK_MONOTONIC, &end[i]);
 		}
 	}	
 
 	for(int i=0; i < 9; i++){
-		double avg_diff_t = ((double)(end[i] - begin[i]))/(CLOCKS_PER_SEC * AVERAGE_ROUNDS);
+		double avg_diff_t = ( (end[i].tv_sec - begin[i].tv_sec) + ((end[i].tv_nsec - begin[i].tv_nsec) / 1000000000.0) ) / AVERAGE_ROUNDS;
 		printf("tempo combo %d: %f\n", i, avg_diff_t);
 	}
 
